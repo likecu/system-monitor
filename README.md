@@ -8,11 +8,61 @@
 2. **数据存储层**：MariaDB数据库存储历史监控数据
 3. **数据展示层**：基于Flask的Web应用，提供实时和历史数据查询、图表展示
 
+## 快速开始
+
+### SSH连接到远程服务器
+
+```bash
+ssh -i ~/.ssh/milk milk@34.29.5.105
+```
+
+### 进入项目目录
+
+```bash
+cd ~/system-monitor
+```
+
+### 管理监控脚本
+
+```bash
+# 启动监控采集
+./run_monitor.sh start
+
+# 查看运行状态
+./run_monitor.sh status
+
+# 查看实时日志
+./run_monitor.sh logs
+
+# 停止监控
+./run_monitor.sh stop
+
+# 重启监控
+./run_monitor.sh restart
+```
+
+### 查看监控数据
+
+直接查询数据库：
+
+```bash
+sudo mysql -u root -e "USE monitor; SELECT timestamp, cpu_percent, memory_percent, disk_percent FROM system_metrics ORDER BY timestamp DESC LIMIT 10;"
+```
+
+查看最新记录：
+
+```bash
+sudo mysql -u root -e "USE monitor; SELECT COUNT(*) as total, AVG(cpu_percent) as avg_cpu, AVG(memory_percent) as avg_mem FROM system_metrics;"
+```
+
 ## 项目结构
 
 ```
 .
 ├── monitor_collector.py      # 数据采集脚本
+├── run_monitor.sh            # 启动管理脚本
+├── init_db.sql               # 数据库初始化脚本
+├── requirements.txt          # Python依赖列表
 ├── monitor-web/              # Web应用目录
 │   ├── app.py               # Flask应用主程序
 │   ├── templates/           # HTML模板目录
@@ -41,12 +91,14 @@ pip install psutil mysql-connector-python flask
 CREATE DATABASE monitor;
 
 -- 创建监控用户并授权
-CREATE USER 'monitor'@'localhost' IDENTIFIED BY 'monitor123';
+CREATE USER 'monitor'@'localhost' IDENTIFIED BY '!A33b3e561fec';
 GRANT ALL PRIVILEGES ON monitor.* TO 'monitor'@'localhost';
 FLUSH PRIVILEGES;
 
--- 创建系统资源监控表
+-- 切换到监控数据库
 USE monitor;
+
+-- 创建系统资源监控表
 CREATE TABLE system_metrics (
     id INT AUTO_INCREMENT PRIMARY KEY,
     timestamp DATETIME NOT NULL,
@@ -54,47 +106,53 @@ CREATE TABLE system_metrics (
     memory_total BIGINT NOT NULL,
     memory_used BIGINT NOT NULL,
     memory_free BIGINT NOT NULL,
+    memory_percent FLOAT NOT NULL,
     disk_total BIGINT NOT NULL,
     disk_used BIGINT NOT NULL,
     disk_free BIGINT NOT NULL,
+    disk_percent FLOAT NOT NULL,
     network_sent BIGINT NOT NULL,
     network_recv BIGINT NOT NULL
 );
 ```
 
-## GitHub同步方案
-
-### 1. 在本地初始化Git仓库
+### 3. 运行采集脚本
 
 ```bash
-# 初始化Git仓库
-git init
+# 启动监控采集
+python3 monitor_collector.py
 
+# 或使用管理脚本
+chmod +x run_monitor.sh
+./run_monitor.sh start
+```
+
+## GitHub同步方案
+
+### 1. 本地代码更新
+
+```bash
 # 添加文件
 git add .
 
 # 提交代码
-git commit -m "Initial commit"
-```
-
-### 2. 创建GitHub仓库
-
-在GitHub上创建一个新的仓库，然后将本地代码推送到GitHub：
-
-```bash
-# 添加远程仓库
-git remote add origin https://github.com/likecu/system-monitor.git
+git commit -m "描述信息"
 
 # 推送到GitHub
-git push -u origin main
+git push origin master
 ```
 
-### 3. 在远程服务器上拉取代码
+### 2. 远程服务器更新
 
 ```bash
-# 克隆GitHub仓库
-cd /root
-git clone https://github.com/likecu/system-monitor.git
+# SSH连接到服务器
+ssh -i ~/.ssh/milk milk@34.29.5.105
+
+# 进入项目目录
+cd ~/system-monitor
+
+# 拉取最新代码
+git pull origin master
 ```
 
 ## 远程服务器部署
@@ -110,14 +168,33 @@ sudo apt install -y python3-pip
 sudo pip3 install --break-system-packages psutil mysql-connector-python flask
 ```
 
-### 2. 启动数据采集服务
+### 2. 初始化数据库
 
 ```bash
-# 复制采集脚本到指定目录
-sudo cp /root/system-monitor/monitor_collector.py /root/
+# 执行数据库初始化脚本
+sudo mysql -u root < init_db.sql
+```
 
+### 3. 启动数据采集服务
+
+#### 方式一：使用管理脚本（推荐）
+
+```bash
+chmod +x run_monitor.sh
+./run_monitor.sh start
+```
+
+#### 方式二：直接运行
+
+```bash
+python3 monitor_collector.py &
+```
+
+#### 方式三：使用系统服务
+
+```bash
 # 设置执行权限
-sudo chmod +x /root/monitor_collector.py
+chmod +x monitor_collector.py
 
 # 创建系统服务
 sudo cat > /etc/systemd/system/monitor-collector.service << 'EOF'
@@ -141,11 +218,11 @@ sudo systemctl start monitor-collector
 sudo systemctl enable monitor-collector
 ```
 
-### 3. 启动Web监控服务
+### 4. 启动Web监控服务（可选）
 
 ```bash
 # 复制Web应用到指定目录
-sudo cp -r /root/system-monitor/monitor-web /root/
+cp -r monitor-web ~/
 
 # 创建系统服务
 sudo cat > /etc/systemd/system/monitor-web.service << 'EOF'
@@ -156,7 +233,7 @@ After=mysql.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/monitor-web
+WorkingDirectory=~/monitor-web
 ExecStart=/usr/bin/python3 app.py
 Restart=always
 
@@ -164,13 +241,13 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-# 启动并启用服务
+# 启动并启用Web服务
 sudo systemctl daemon-reload
 sudo systemctl start monitor-web
 sudo systemctl enable monitor-web
 ```
 
-### 4. 配置防火墙
+### 5. 配置防火墙
 
 ```bash
 # 允许8080端口访问
@@ -183,7 +260,7 @@ sudo ufw reload
 监控面板可以通过以下URL访问：
 
 ```
-http://服务器IP:8080
+http://34.29.5.105:8080
 ```
 
 ## 服务管理
@@ -192,42 +269,81 @@ http://服务器IP:8080
 
 ```bash
 # 查看数据采集服务状态
-sudo systemctl status monitor-collector
+ps aux | grep monitor_collector
 
-# 查看Web服务状态
-sudo systemctl status monitor-web
+# 或使用管理脚本
+./run_monitor.sh status
+```
+
+### 查看实时日志
+
+```bash
+./run_monitor.sh logs
+
+# 或直接查看日志文件
+tail -f monitor.log
 ```
 
 ### 重启服务
 
 ```bash
-# 重启数据采集服务
-sudo systemctl restart monitor-collector
-
-# 重启Web服务
-sudo systemctl restart monitor-web
+./run_monitor.sh restart
 ```
 
 ### 停止服务
 
 ```bash
-# 停止数据采集服务
-sudo systemctl stop monitor-collector
-
-# 停止Web服务
-sudo systemctl stop monitor-web
+./run_monitor.sh stop
 ```
 
-## 数据保留策略
+## 数据管理
 
-建议定期清理旧的监控数据，以避免数据库过大。可以使用以下SQL语句定期清理：
+### 查看数据统计
 
-```sql
--- 保留最近30天的数据
-DELETE FROM system_metrics WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY);
+```bash
+# 查看总记录数
+sudo mysql -u root -e "USE monitor; SELECT COUNT(*) as total FROM system_metrics;"
+
+# 查看最近24小时数据
+sudo mysql -u root -e "USE monitor; SELECT * FROM system_metrics WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR);"
+
+# 查看平均使用率
+sudo mysql -u root -e "USE monitor; SELECT AVG(cpu_percent) as avg_cpu, AVG(memory_percent) as avg_mem, AVG(disk_percent) as avg_disk FROM system_metrics;"
+```
+
+### 清理旧数据
+
+```bash
+# 保留最近30天的数据
+sudo mysql -u root -e "USE monitor; DELETE FROM system_metrics WHERE timestamp < DATE_SUB(NOW(), INTERVAL 30 DAY);"
+
+# 调用存储过程清理数据
+sudo mysql -u root -e "USE monitor; CALL cleanup_old_data(30);"
+```
+
+### 备份数据
+
+```bash
+# 备份整个监控数据库
+sudo mysqldump -u root monitor > monitor_backup_$(date +%Y%m%d).sql
+
+# 备份最近7天数据
+sudo mysql -u root -e "USE monitor; SELECT * INTO OUTFILE '/tmp/monitor_backup.csv' FROM system_metrics WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY);"
 ```
 
 ## 自定义配置
+
+### 环境变量配置
+
+支持通过环境变量配置（推荐）：
+
+```bash
+export DB_HOST='localhost'
+export DB_USER='monitor'
+export DB_PASSWORD='!A33b3e561fec'
+export DB_NAME='monitor'
+export COLLECT_INTERVAL='60'
+```
 
 ### 修改采集间隔
 
@@ -240,17 +356,33 @@ INTERVAL = 60  # 修改为其他值，如300表示5分钟
 
 ### 修改数据库配置
 
-在`monitor_collector.py`和`monitor-web/app.py`中修改`DB_CONFIG`变量：
+在`monitor_collector.py`中修改`DB_CONFIG`变量：
 
 ```python
 # MySQL连接配置
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'monitor',
-    'password': 'monitor123',
+    'password': '!A33b3e561fec',
     'database': 'monitor'
 }
 ```
+
+## 监控指标说明
+
+| 指标 | 说明 | 单位 |
+|------|------|------|
+| cpu_percent | CPU使用率 | 百分比 |
+| memory_total | 内存总大小 | bytes |
+| memory_used | 已用内存 | bytes |
+| memory_free | 可用内存 | bytes |
+| memory_percent | 内存使用率 | 百分比 |
+| disk_total | 磁盘总大小 | bytes |
+| disk_used | 已用磁盘 | bytes |
+| disk_free | 可用磁盘 | bytes |
+| disk_percent | 磁盘使用率 | 百分比 |
+| network_sent | 网络发送字节数 | bytes |
+| network_recv | 网络接收字节数 | bytes |
 
 ## 技术栈
 
@@ -269,6 +401,7 @@ DB_CONFIG = {
 - ✅ 图表化展示历史数据趋势
 - ✅ 自动启动和故障恢复
 - ✅ 支持GitHub同步部署
+- ✅ 支持后台运行和日志管理
 
 ## 注意事项
 
@@ -277,6 +410,7 @@ DB_CONFIG = {
 3. 考虑使用Nginx作为反向代理，提高Web应用的性能和安全性
 4. 监控Web应用本身的资源使用情况
 5. 定期更新依赖库，确保安全性
+6. 数据库密码已配置为`!A33b3e561fec`，建议定期更换
 
 ## License
 
