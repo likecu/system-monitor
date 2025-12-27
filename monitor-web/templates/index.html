@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>系统监控面板</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>系统监控面板</h1>
+        
+        <div class="time-range">
+            <label>时间范围：</label>
+            <select onchange="window.location.href='/?time_range='+this.value">
+                <option value="2h" {{ 'selected' if current_time_range == '2h' else '' }}>2小时</option>
+                <option value="24h" {{ 'selected' if current_time_range == '24h' else '' }}>24小时</option>
+                <option value="7d" {{ 'selected' if current_time_range == '7d' else '' }}>7天</option>
+                <option value="30d" {{ 'selected' if current_time_range == '30d' else '' }}>30天</option>
+            </select>
+        </div>
+        
+        <div class="charts">
+            <div class="chart-item">
+                <h2>CPU使用率</h2>
+                <canvas id="cpuChart"></canvas>
+            </div>
+            
+            <div class="chart-item">
+                <h2>内存使用</h2>
+                <canvas id="memoryChart"></canvas>
+            </div>
+            
+            <div class="chart-item">
+                <h2>磁盘使用</h2>
+                <canvas id="diskChart"></canvas>
+            </div>
+            
+            <div class="chart-item">
+                <h2>网络流量</h2>
+                <canvas id="networkChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 解析数据
+        const timestamps = {{ timestamps|safe }};
+        const cpuData = {{ cpu_data|safe }};
+        const memoryUsed = {{ memory_used|safe }};
+        const memoryTotal = {{ memory_total|safe }};
+        const diskUsed = {{ disk_used|safe }};
+        const diskTotal = {{ disk_total|safe }};
+        const networkSent = {{ network_sent|safe }};
+        const networkRecv = {{ network_recv|safe }};
+        
+        // 通用图表配置
+        const chartConfig = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'minute'
+                    }
+                }
+            }
+        };
+        
+        // CPU使用率图表
+        new Chart(document.getElementById('cpuChart'), {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: 'CPU使用率(%)',
+                    data: cpuData,
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: chartConfig
+        });
+        
+        // 内存使用图表
+        new Chart(document.getElementById('memoryChart'), {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: '已用内存(GB)',
+                    data: memoryUsed,
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    tension: 0.1
+                }, {
+                    label: '总内存(GB)',
+                    data: memoryTotal,
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: chartConfig
+        });
+        
+        // 磁盘使用图表
+        new Chart(document.getElementById('diskChart'), {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: '已用磁盘(GB)',
+                    data: diskUsed,
+                    borderColor: 'rgba(255, 206, 86, 1)',
+                    backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                    tension: 0.1
+                }, {
+                    label: '总磁盘(GB)',
+                    data: diskTotal,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: chartConfig
+        });
+        
+        // 网络流量图表
+        new Chart(document.getElementById('networkChart'), {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: '上传流量(MB)',
+                    data: networkSent,
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    tension: 0.1
+                }, {
+                    label: '下载流量(MB)',
+                    data: networkRecv,
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: chartConfig
+        });
+    </script>
+</body>
+</html>
