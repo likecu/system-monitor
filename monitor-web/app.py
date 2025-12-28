@@ -16,6 +16,36 @@ DB_CONFIG = {
 # 中国时区偏移量（UTC+8）
 CHINA_TIMEZONE = timedelta(hours=8)
 
+# 最大返回数据点数
+MAX_DATA_POINTS = 100
+
+
+def downsample_metrics(metrics):
+    """
+    对监控数据进行降采样，保持数据趋势特征
+
+    Args:
+        metrics: 原始监控数据列表
+
+    Returns:
+        list: 降采样后的数据列表
+    """
+    if len(metrics) <= MAX_DATA_POINTS:
+        return metrics
+
+    step = len(metrics) // MAX_DATA_POINTS
+    downsampled = []
+
+    for i in range(0, len(metrics), step):
+        if i + step < len(metrics):
+            chunk = metrics[i:i + step]
+        else:
+            chunk = metrics[i:]
+        if chunk:
+            downsampled.append(chunk[0])
+
+    return downsampled
+
 @app.route('/')
 def index():
     # 默认时间范围为2小时
@@ -43,10 +73,13 @@ def index():
     
     cursor.execute(query, (start_time,))
     metrics = cursor.fetchall()
-    
+
     cursor.close()
     conn.close()
-    
+
+    # 降采样以减少数据点密度
+    metrics = downsample_metrics(metrics)
+
     # 转换为前端所需格式，时间转换为中国时区
     timestamps = [(m['timestamp'] + CHINA_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S') for m in metrics]
     cpu_data = [m['cpu_percent'] for m in metrics]
