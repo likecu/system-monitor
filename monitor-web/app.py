@@ -89,5 +89,5 @@ def index():
                           current_time_range=time_range)
 
 if __name__ == '__main__':
-    # 监听所有IP，端口8080
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    # 监听所有IP，端口8081
+    app.run(host='0.0.0.0', port=8081, debug=False)
