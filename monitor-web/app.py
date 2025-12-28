@@ -13,6 +13,9 @@ DB_CONFIG = {
     "database": "monitor"
 }
 
+# 中国时区偏移量（UTC+8）
+CHINA_TIMEZONE = timedelta(hours=8)
+
 @app.route('/')
 def index():
     # 默认时间范围为2小时
@@ -44,15 +47,35 @@ def index():
     cursor.close()
     conn.close()
     
-    # 转换为前端所需格式
-    timestamps = [m['timestamp'].strftime('%Y-%m-%d %H:%M:%S') for m in metrics]
+    # 转换为前端所需格式，时间转换为中国时区
+    timestamps = [(m['timestamp'] + CHINA_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S') for m in metrics]
     cpu_data = [m['cpu_percent'] for m in metrics]
-    memory_used = [m['memory_used'] / (1024**3) for m in metrics]  # 转换为GB
-    memory_total = [m['memory_total'] / (1024**3) for m in metrics]  # 转换为GB
-    disk_used = [m['disk_used'] / (1024**3) for m in metrics]  # 转换为GB
-    disk_total = [m['disk_total'] / (1024**3) for m in metrics]  # 转换为GB
-    network_sent = [m['network_sent'] / (1024**2) for m in metrics]  # 转换为MB
-    network_recv = [m['network_recv'] / (1024**2) for m in metrics]  # 转换为MB
+    memory_used = [m['memory_used'] / (1024**3) for m in metrics]
+    memory_total = [m['memory_total'] / (1024**3) for m in metrics]
+    disk_used = [m['disk_used'] / (1024**3) for m in metrics]
+    disk_total = [m['disk_total'] / (1024**3) for m in metrics]
+
+    # 计算平均网络流量（相邻数据点的差值除以时间间隔）
+    network_sent = []
+    network_recv = []
+
+    for i in range(len(metrics)):
+        if i == 0:
+            # 第一个数据点，设为0或使用原始值的差分估算
+            network_sent.append(metrics[0]['network_sent'] / (1024**2))
+            network_recv.append(metrics[0]['network_recv'] / (1024**2))
+        else:
+            # 计算相邻数据点的差值
+            time_diff = (metrics[i]['timestamp'] - metrics[i-1]['timestamp']).total_seconds()
+            if time_diff > 0:
+                # 转换为MB/s（差值 / 时间间隔 / 1024^2）
+                sent_rate = (metrics[i]['network_sent'] - metrics[i-1]['network_sent']) / time_diff / (1024**2)
+                recv_rate = (metrics[i]['network_recv'] - metrics[i-1]['network_recv']) / time_diff / (1024**2)
+                network_sent.append(max(0, sent_rate))  # 确保非负
+                network_recv.append(max(0, recv_rate))
+            else:
+                network_sent.append(0)
+                network_recv.append(0)
     
     return render_template('index.html', 
                           timestamps=json.dumps(timestamps),
