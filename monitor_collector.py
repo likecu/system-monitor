@@ -17,7 +17,7 @@ DB_CONFIG = {
     'database': os.getenv('DB_NAME', 'monitor')
 }
 
-INTERVAL = int(os.getenv('COLLECT_INTERVAL', '60'))
+INTERVAL = int(os.getenv('COLLECT_INTERVAL', '5'))
 
 
 def collect_metrics():

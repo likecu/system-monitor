@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS monitor_config (
 
 -- 插入默认配置
 INSERT INTO monitor_config (config_key, config_value, description) VALUES
-('collect_interval', '60', '数据采集间隔(秒)'),
+('collect_interval', '5', '数据采集间隔(秒)'),
 ('data_retention_days', '30', '数据保留天数'),
 ('enabled', 'true', '监控是否启用')
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
